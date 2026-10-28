@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { WorkspaceManager } from '../server/workspaces.mjs';
+
+test('多文件夹切换、持久化与移除不删除原文件', async (t) => {
+  const root = await fs.mkdtemp(path.resolve('.test-workspace-'));
+  const external = path.join(root, '外部课程');
+  const manager = await new WorkspaceManager(root).init();
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const defaultStore = await manager.current();
+  await defaultStore.create({ title: '默认题目', content: '默认' });
+  const summary = await manager.add({ name: '操作系统课程', path: external });
+  assert.equal(summary.workspaces.length, 2);
+  assert.equal(summary.activeId, summary.workspaces[1].id);
+  const externalStore = await manager.current();
+  await externalStore.create({ title: '外部题目', content: '外部', subject: '操作系统' });
+  assert.equal((await manager.current()).list().length, 1);
+  const board = await externalStore.createBoard({ name: '知识结构' });
+  const node = { id: 'node1', type: 'text', text: '死锁', x: 20, y: 30, width: 240, height: 140 };
+  await externalStore.updateBoard(board.id, { nodes: [node], edges: [] });
+  assert.equal(externalStore.getBoard(board.id).nodes[0].text, '死锁');
+  const reopened = await new WorkspaceManager(root).init();
+  assert.equal(reopened.summary().activeId, summary.activeId);
+  assert.equal((await reopened.current()).list()[0].title, '外部题目');
+  await reopened.remove(summary.activeId);
+  assert.equal(reopened.summary().workspaces.length, 1);
+  assert.equal(JSON.parse(await fs.readFile(path.join(external, 'notebook.json'), 'utf8')).questions[0].title, '外部题目');
+});

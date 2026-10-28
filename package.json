@@ -1,6 +1,6 @@
 {
   "name": "backtrack-notebook",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "回溯错题本：支持拍照整理、分类复习、版本回滚与外部知识库的跨平台桌面应用",
   "type": "module",

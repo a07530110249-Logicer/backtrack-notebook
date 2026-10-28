@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Aperture, Camera, ImagePlus, Loader2, RefreshCw, ScanLine, Trash2, Upload, X } from 'lucide-react';
-import { api } from '../api';
+import { api, assetUrl } from '../api';
 import type { Question } from '../types';
-import { compressImage, ERROR_TYPES, SUBJECTS } from '../utils';
+import { compressImage, ERROR_TYPES } from '../utils';
 
 interface Props {
   question: Question | null;
@@ -90,7 +90,7 @@ export default function QuestionEditor({ question, onClose, onSaved, onError }: 
           <label className="field-label">题目照片 <span>保留原始思路与批注</span></label>
           <div className={`photo-drop ${form.image ? 'has-image' : ''}`}>
             {form.image ? <>
-              <img src={form.image} alt="错题照片预览" />
+              <img src={assetUrl(form.image)} alt="错题照片预览" />
               <div className="photo-actions"><button onClick={() => fileRef.current?.click()}><RefreshCw size={15} />更换</button><button onClick={() => set('image', '')}><Trash2 size={15} />移除</button></div>
             </> : <div className="photo-empty"><div><ImagePlus size={28} /></div><strong>把错题拍下来</strong><p>支持 JPG、PNG，自动压缩存储</p><button className="secondary-button" onClick={() => fileRef.current?.click()}><Upload size={16} />选择照片</button></div>}
           </div>
@@ -104,7 +104,7 @@ export default function QuestionEditor({ question, onClose, onSaved, onError }: 
         <div className="fields-column">
           <div className="field full"><label className="field-label">错题标题 <em>*</em></label><input value={form.title || ''} onChange={(e) => set('title', e.target.value)} placeholder="例如：二次函数区间最值的分类讨论" autoFocus /></div>
           <div className="form-grid three">
-            <div className="field"><label className="field-label">科目</label><select value={form.subject} onChange={(e) => set('subject', e.target.value)}>{SUBJECTS.map((s) => <option key={s}>{s}</option>)}</select></div>
+            <div className="field"><label className="field-label">科目 / 课程</label><input value={form.subject || ''} onChange={(e) => set('subject', e.target.value)} placeholder="如：操作系统、高等数学" list="subject-suggestions" /><datalist id="subject-suggestions"><option value="数学" /><option value="物理" /><option value="英语" /><option value="高等数学" /><option value="操作系统" /></datalist></div>
             <div className="field"><label className="field-label">难度</label><select value={form.difficulty} onChange={(e) => set('difficulty', e.target.value)}><option>基础</option><option>中等</option><option>困难</option></select></div>
             <div className="field"><label className="field-label">掌握程度</label><select value={form.mastery} onChange={(e) => set('mastery', e.target.value)}><option>未掌握</option><option>复习中</option><option>已掌握</option></select></div>
           </div>

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
 const express = require('express');
@@ -52,6 +52,10 @@ function createWindow() {
 app.whenReady().then(async () => {
   await startApi();
   ipcMain.handle('backtrack:get-api-info', () => apiInfo);
+  ipcMain.handle('backtrack:select-directory', async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+    return result.canceled ? null : result.filePaths[0];
+  });
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
