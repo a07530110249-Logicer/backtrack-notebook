@@ -1,0 +1,14 @@
+node_modules/
+dist/
+release/
+.local-data/
+artifacts/
+.test-data-*
+.test-api-*
+*.tsbuildinfo
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
