@@ -5,9 +5,30 @@ import { WorkspaceManager } from './workspaces.mjs';
 
 function asyncRoute(handler) { return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next); }
 function validHttpUrl(value) {
-  const url = new URL(value);
-  if (!['http:', 'https:'].includes(url.protocol)) throw Object.assign(new Error('只支持 HTTP 或 HTTPS 地址'), { status: 400 });
-  return url;
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+    return url;
+  } catch {
+    throw Object.assign(new Error('请输入以 http:// 或 https:// 开头的完整地址'), { status: 400 });
+  }
+}
+function connectionError(error) {
+  if (error.name === 'AbortError') return '连接超时，请确认服务已经启动、地址正确';
+  const code = error.cause?.code || error.code;
+  if (code === 'ECONNREFUSED') return '无法连接，目标服务可能还没有启动';
+  if (code === 'ENOTFOUND') return '找不到这个地址，请检查网址是否填写正确';
+  if (code === 'CERT_HAS_EXPIRED' || code === 'DEPTH_ZERO_SELF_SIGNED_CERT') return '安全证书有问题，请检查 HTTPS 配置';
+  return error.message || '连接失败，请检查地址和网络';
+}
+function chatCompletionsUrl(value) {
+  const base = validHttpUrl(value).href.replace(/\/$/, '');
+  return base.endsWith('/chat/completions') ? base : `${base}/chat/completions`;
+}
+function statusError(status, target = '目标服务') {
+  if (status === 401 || status === 403) return `${target}拒绝了访问，请检查密钥或令牌`;
+  if (status === 404) return '没有找到这个接口，请检查地址是否完整';
+  return `${target}返回错误（HTTP ${status}）`;
 }
 async function fetchWithTimeout(url, options = {}, timeout = 10000) {
   const controller = new AbortController();
@@ -22,13 +43,13 @@ async function queryKnowledge(source, query) {
     const headers = { Accept: 'application/json' };
     if (source.token) headers.Authorization = `Bearer ${source.token}`;
     const response = await fetchWithTimeout(url, { headers });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw new Error(statusError(response.status, '知识库'));
     const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('json')) throw new Error('接口未返回 JSON');
+    if (!contentType.includes('json')) throw new Error('知识库没有返回 JSON 数据，请检查检索地址');
     const payload = await response.json();
     return { sourceId: source.id, sourceName: source.name, ok: true, results: Array.isArray(payload) ? payload : (payload.results || payload.items || payload.data || payload) };
   } catch (error) {
-    return { sourceId: source.id, sourceName: source.name, ok: false, error: error.name === 'AbortError' ? '连接超时' : error.message, results: [] };
+    return { sourceId: source.id, sourceName: source.name, ok: false, error: connectionError(error), results: [] };
   }
 }
 
@@ -45,7 +66,7 @@ export async function createApiApp({ dataDir, token = '' } = {}) {
   });
   const current = () => manager.current();
 
-  app.get('/health', (req, res) => res.json({ ok: true, service: 'backtrack-notebook', version: '2.0.0' }));
+  app.get('/health', (req, res) => res.json({ ok: true, service: 'rethink', version: '2.1.0' }));
   app.get('/workspaces', (req, res) => res.json(manager.summary()));
   app.post('/workspaces', asyncRoute(async (req, res) => res.status(201).json(await manager.add(req.body))));
   app.post('/workspaces/:id/activate', asyncRoute(async (req, res) => res.json(await manager.activate(req.params.id))));
@@ -72,20 +93,37 @@ export async function createApiApp({ dataDir, token = '' } = {}) {
   app.get('/integrations', asyncRoute(async (req, res) => res.json((await current()).getIntegrations())));
   app.put('/integrations', asyncRoute(async (req, res) => res.json(await (await current()).updateIntegrations(req.body))));
   app.post('/integrations/test', asyncRoute(async (req, res) => {
-    const url = validHttpUrl(req.body.url);
-    const headers = { Accept: 'application/json, image/*;q=0.9, */*;q=0.5' };
+    const kind = ['camera', 'knowledge', 'model'].includes(req.body.kind) ? req.body.kind : 'generic';
+    const url = kind === 'model' ? new URL(chatCompletionsUrl(req.body.url)) : validHttpUrl(req.body.url);
+    const headers = { Accept: kind === 'camera' ? 'image/*' : 'application/json' };
     if (req.body.token) headers.Authorization = `Bearer ${req.body.token}`;
-    const response = await fetchWithTimeout(url, { headers });
+    if (kind === 'knowledge') url.searchParams.set('q', '连接测试');
+    const options = { headers };
+    if (kind === 'model') {
+      headers['Content-Type'] = 'application/json';
+      options.method = 'POST';
+      options.body = JSON.stringify({ model: String(req.body.model || ''), messages: [{ role: 'user', content: '只回复：连接成功' }], stream: false, max_tokens: 12 });
+    }
+    const response = await fetchWithTimeout(url, options, kind === 'model' ? 60000 : 10000);
     const contentType = response.headers.get('content-type') || '';
-    if (!response.ok) return res.status(502).json({ error: `目标服务返回 ${response.status}`, ok: false });
-    if (contentType.includes('application/json')) return res.json({ ok: true, status: response.status, contentType, preview: await response.json() });
-    res.json({ ok: true, status: response.status, contentType });
+    if (!response.ok) return res.status(502).json({ error: statusError(response.status, kind === 'model' ? '模型服务' : kind === 'camera' ? '摄像机' : '知识库'), ok: false });
+    if (kind === 'camera' && !contentType.startsWith('image/')) return res.status(415).json({ error: '地址可以打开，但没有返回图片。请填写直接显示 JPG 或 PNG 的照片地址', ok: false });
+    if (['knowledge', 'model'].includes(kind) && !contentType.includes('json')) return res.status(415).json({ error: '服务没有返回正确的 JSON 数据，请检查接口地址', ok: false });
+    if (kind === 'model') {
+      const payload = await response.json();
+      if (!Array.isArray(payload.choices)) return res.status(502).json({ error: '模型已经响应，但格式不兼容。请使用 OpenAI 兼容接口', ok: false });
+      return res.json({ ok: true, status: response.status, contentType, message: '模型连接成功，可以开始对话' });
+    }
+    if (contentType.includes('json')) return res.json({ ok: true, status: response.status, contentType, message: kind === 'knowledge' ? '知识库连接成功，可以检索' : '连接成功', preview: await response.json() });
+    res.json({ ok: true, status: response.status, contentType, message: kind === 'camera' ? '摄像机连接成功，可以获取照片' : '连接成功' });
   }));
   app.post('/integrations/camera/capture', asyncRoute(async (req, res) => {
     const config = (await current()).getIntegrations();
     const url = validHttpUrl(req.body.url || config.cameraUrl);
-    const response = await fetchWithTimeout(url, { headers: { Accept: 'image/*' } });
-    if (!response.ok) return res.status(502).json({ error: `摄像机返回 ${response.status}` });
+    const cameraToken = req.body.token || config.cameraToken;
+    const headers = { Accept: 'image/*', ...(cameraToken ? { Authorization: `Bearer ${cameraToken}` } : {}) };
+    const response = await fetchWithTimeout(url, { headers });
+    if (!response.ok) return res.status(502).json({ error: statusError(response.status, '摄像机') });
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.startsWith('image/')) return res.status(415).json({ error: '目标地址没有返回图片' });
     const buffer = Buffer.from(await response.arrayBuffer());
@@ -104,13 +142,13 @@ export async function createApiApp({ dataDir, token = '' } = {}) {
   app.post('/model/chat', asyncRoute(async (req, res) => {
     const { model } = (await current()).getIntegrations();
     if (!model.enabled) return res.status(400).json({ error: '请先在集成接口中启用模型连接' });
-    const base = validHttpUrl(model.baseUrl).href.replace(/\/$/, '');
+    const endpoint = chatCompletionsUrl(model.baseUrl);
     const messages = Array.isArray(req.body.messages) ? req.body.messages.slice(0, 20).map((message) => ({ role: ['system', 'user', 'assistant'].includes(message.role) ? message.role : 'user', content: String(message.content || '').slice(0, 20000) })) : [];
     if (!messages.length) return res.status(400).json({ error: 'messages 不能为空' });
     const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
     if (model.apiKey) headers.Authorization = `Bearer ${model.apiKey}`;
-    const response = await fetchWithTimeout(`${base}/chat/completions`, { method: 'POST', headers, body: JSON.stringify({ model: model.model, messages, stream: false, temperature: req.body.temperature ?? 0.2 }) }, 60000);
-    if (!response.ok) return res.status(502).json({ error: `模型服务返回 ${response.status}` });
+    const response = await fetchWithTimeout(endpoint, { method: 'POST', headers, body: JSON.stringify({ model: model.model, messages, stream: false, temperature: req.body.temperature ?? 0.2 }) }, 60000);
+    if (!response.ok) return res.status(502).json({ error: statusError(response.status, '模型服务') });
     res.json(await response.json());
   }));
 
@@ -125,7 +163,7 @@ export async function createApiApp({ dataDir, token = '' } = {}) {
   }));
   app.use((error, req, res, next) => {
     const status = error.status || (error.name === 'AbortError' ? 504 : 500);
-    res.status(status).json({ error: error.name === 'AbortError' ? '外部服务连接超时' : (error.message || '服务器错误') });
+    res.status(status).json({ error: connectionError(error) });
   });
   return { app, store: await current(), manager };
 }

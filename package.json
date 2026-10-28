@@ -1,8 +1,8 @@
 {
-  "name": "backtrack-notebook",
-  "version": "2.0.0",
+  "name": "rethink",
+  "version": "2.1.0",
   "private": true,
-  "description": "回溯错题本：支持拍照整理、分类复习、版本回滚与外部知识库的跨平台桌面应用",
+  "description": "Rethink：支持拍照整理、分类复习、版本回滚与外部知识库的跨平台桌面应用",
   "type": "module",
   "main": "electron/main.cjs",
   "author": "Frederick",
@@ -37,8 +37,8 @@
     "vite": "^6.0.5"
   },
   "build": {
-    "appId": "com.frederick.backtrack",
-    "productName": "回溯错题本",
+    "appId": "com.frederick.rethink",
+    "productName": "Rethink",
     "directories": {
       "output": "release"
     },

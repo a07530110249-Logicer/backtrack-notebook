@@ -32,7 +32,7 @@ export const api = {
   saveBoard: (id: string, data: Partial<Board>) => request<Board>(`/boards/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   removeBoard: (id: string) => request<void>(`/boards/${id}`, { method: 'DELETE' }),
   integrations: () => request<IntegrationConfig>('/integrations'), saveIntegrations: (data: IntegrationConfig) => request<IntegrationConfig>('/integrations', { method: 'PUT', body: JSON.stringify(data) }),
-  testIntegration: (url: string, token = '') => request<{ ok: boolean; status: number; contentType: string }>('/integrations/test', { method: 'POST', body: JSON.stringify({ url, token }) }),
-  captureCamera: (url: string) => request<{ image: string }>('/integrations/camera/capture', { method: 'POST', body: JSON.stringify({ url }) }),
+  testIntegration: (data: { kind: 'camera' | 'knowledge' | 'model'; url: string; token?: string; model?: string }) => request<{ ok: boolean; status: number; contentType: string; message?: string }>('/integrations/test', { method: 'POST', body: JSON.stringify(data) }),
+  captureCamera: (url: string, token = '') => request<{ image: string }>('/integrations/camera/capture', { method: 'POST', body: JSON.stringify({ url, token }) }),
   searchKnowledge: (query: string, sourceIds: string[] = []) => request<{ query: string; sources: KnowledgeSearchGroup[] }>('/integrations/knowledge/search', { method: 'POST', body: JSON.stringify({ query, sourceIds }) }),
 };

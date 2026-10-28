@@ -6,8 +6,10 @@ import { NotebookStore } from '../server/store.mjs';
 async function tempStore(t) { const dir = await fs.mkdtemp(path.resolve('.test-data-')); t.after(() => fs.rm(dir, { recursive: true, force: true })); return new NotebookStore(dir).init(); }
 test('创建、自由课程分类与统计', async (t) => {
   const store = await tempStore(t);
-  const created = await store.create({ title: '测试错题', subject: '操作系统', content: '什么是死锁？', answer: '四个必要条件', tags: ['OS'], errorType: '概念不清' });
+  const created = await store.create({ title: '测试错题', subject: '操作系统', content: '什么是死锁？', answer: '四个必要条件', tags: ['OS'], errorType: '边界条件遗漏', difficulty: '需要综合推导' });
   assert.ok(created.id);
+  assert.equal(created.errorType, '边界条件遗漏');
+  assert.equal(created.difficulty, '需要综合推导');
   assert.equal(store.list({ subject: '操作系统', query: '死锁' })[0].title, '测试错题');
   assert.deepEqual(store.subjects(), ['操作系统']);
   assert.equal(store.stats().total, 1);
@@ -37,7 +39,8 @@ test('逐次练习记录与自由练习模式', async (t) => {
 test('照片保存为工作文件夹内的相对附件', async (t) => {
   const store = await tempStore(t);
   const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
-  const created = await store.create({ title: '照片题', content: '内容', image: pixel });
+  const created = await store.create({ image: pixel });
+  assert.equal(created.title, '未命名错题');
   assert.ok(created.image.startsWith('attachments/'));
   assert.ok(!created.image.startsWith('data:'));
   assert.ok((await fs.stat(path.join(store.dataDir, created.image))).isFile());

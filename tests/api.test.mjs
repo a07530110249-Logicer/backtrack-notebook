@@ -15,6 +15,11 @@ test('REST API 覆盖鉴权、回滚、多知识库与本地模型兼容接口',
   const base = `http://127.0.0.1:${server.address().port}/api`;
   const headers = { Authorization: 'Bearer test-secret', 'Content-Type': 'application/json' };
   const external = http.createServer((req, res) => {
+    if (req.url.startsWith('/camera')) {
+      if (req.headers.authorization !== 'Bearer camera-secret') { res.statusCode = 401; return res.end(); }
+      res.setHeader('Content-Type', 'image/png');
+      return res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'));
+    }
     res.setHeader('Content-Type', 'application/json');
     if (req.url.startsWith('/search')) return res.end(JSON.stringify({ results: [{ title: '操作系统', query: new URL(req.url, 'http://localhost').searchParams.get('q') }] }));
     if (req.url.startsWith('/v1/chat/completions')) return res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: '本地回答' } }] }));
@@ -38,7 +43,17 @@ test('REST API 覆盖鉴权、回滚、多知识库与本地模型兼容接口',
   const restored = await fetch(`${base}/questions/${created.id}/rollback`, { method: 'POST', headers, body: JSON.stringify({ revisionId: revisions[1].id }) }).then((r) => r.json());
   assert.equal(restored.title, 'API 错题');
 
-  await fetch(`${base}/integrations`, { method: 'PUT', headers, body: JSON.stringify({ knowledgeSources: [{ id: 'course', name: '课程库', url: `${externalBase}/search`, enabled: true }], model: { enabled: true, baseUrl: `${externalBase}/v1`, model: 'local-test' } }) });
+  await fetch(`${base}/integrations`, { method: 'PUT', headers, body: JSON.stringify({ cameraUrl: `${externalBase}/camera`, cameraToken: 'camera-secret', knowledgeSources: [{ id: 'course', name: '课程库', url: `${externalBase}/search`, enabled: true }], model: { enabled: true, baseUrl: `${externalBase}/v1/chat/completions`, model: 'local-test' } }) });
+  const cameraTest = await fetch(`${base}/integrations/test`, { method: 'POST', headers, body: JSON.stringify({ kind: 'camera', url: `${externalBase}/camera`, token: 'camera-secret' }) });
+  assert.equal(cameraTest.status, 200);
+  assert.match((await cameraTest.json()).message, /照片/);
+  const knowledgeTest = await fetch(`${base}/integrations/test`, { method: 'POST', headers, body: JSON.stringify({ kind: 'knowledge', url: `${externalBase}/search` }) });
+  assert.equal(knowledgeTest.status, 200);
+  const modelTest = await fetch(`${base}/integrations/test`, { method: 'POST', headers, body: JSON.stringify({ kind: 'model', url: `${externalBase}/v1`, model: 'local-test' }) });
+  assert.equal(modelTest.status, 200);
+  const capture = await fetch(`${base}/integrations/camera/capture`, { method: 'POST', headers, body: '{}' });
+  assert.equal(capture.status, 200);
+  assert.match((await capture.json()).image, /^data:image\/png;base64,/);
   const search = await fetch(`${base}/integrations/knowledge/search`, { method: 'POST', headers, body: JSON.stringify({ query: '死锁' }) }).then((r) => r.json());
   assert.equal(search.sources.length, 1);
   assert.equal(search.sources[0].results[0].query, '死锁');

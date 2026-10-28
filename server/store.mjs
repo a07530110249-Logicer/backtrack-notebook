@@ -2,9 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const ERROR_TYPES = ['概念不清', '计算失误', '审题偏差', '方法不会', '知识遗忘', '表达不规范', '其他'];
 const MASTERIES = ['未掌握', '复习中', '已掌握'];
-const DIFFICULTIES = ['基础', '中等', '困难'];
 const nowIso = () => new Date().toISOString();
 const text = (value, max = 10000) => String(value ?? '').trim().slice(0, max);
 
@@ -26,7 +24,7 @@ function seedData() {
 }
 
 function defaultIntegrations() {
-  return { cameraUrl: '', knowledgeSources: [], model: { enabled: false, baseUrl: 'http://127.0.0.1:11434/v1', apiKey: '', model: 'qwen3:4b' } };
+  return { cameraUrl: '', cameraToken: '', knowledgeSources: [], model: { enabled: false, baseUrl: 'http://127.0.0.1:11434/v1', apiKey: '', model: 'qwen3:4b' } };
 }
 
 function cleanQuestion(input, existing = {}) {
@@ -36,8 +34,7 @@ function cleanQuestion(input, existing = {}) {
     title: text(input.title, 160) || '未命名错题',
     subject: text(input.subject, 80) || existing.subject || '未分类',
     chapter: text(input.chapter, 120), content: text(input.content), answer: text(input.answer), analysis: text(input.analysis),
-    errorType: ERROR_TYPES.includes(input.errorType) ? input.errorType : text(input.errorType, 60) || existing.errorType || '其他',
-    difficulty: DIFFICULTIES.includes(input.difficulty) ? input.difficulty : (existing.difficulty || '中等'), mastery,
+    errorType: text(input.errorType, 80), difficulty: text(input.difficulty, 80), mastery,
     tags: Array.isArray(input.tags) ? input.tags.map((tag) => text(tag, 30)).filter(Boolean).slice(0, 12) : (existing.tags || []),
     image: typeof input.image === 'string' && input.image.length < 20_000_000 ? input.image : (existing.image || ''),
     source: text(input.source, 80) || existing.source || '手动整理', updatedAt: nowIso(),
@@ -50,7 +47,7 @@ function cleanIntegrations(input = {}, existing = defaultIntegrations()) {
   sources = sources.map((source) => ({ id: text(source.id, 100) || randomUUID(), name: text(source.name, 100) || '未命名知识库', url: text(source.url, 2000), token: String(source.token || '').slice(0, 2000), enabled: source.enabled !== false })).filter((source) => source.url);
   const model = input.model || existing.model || {};
   return {
-    cameraUrl: text(input.cameraUrl ?? existing.cameraUrl, 2000), knowledgeSources: sources,
+    cameraUrl: text(input.cameraUrl ?? existing.cameraUrl, 2000), cameraToken: String(input.cameraToken ?? existing.cameraToken ?? '').slice(0, 2000), knowledgeSources: sources,
     knowledgeUrl: '', knowledgeToken: '',
     model: { enabled: model.enabled === true, baseUrl: text(model.baseUrl, 2000) || 'http://127.0.0.1:11434/v1', apiKey: String(model.apiKey || '').slice(0, 2000), model: text(model.model, 160) || 'qwen3:4b' },
   };

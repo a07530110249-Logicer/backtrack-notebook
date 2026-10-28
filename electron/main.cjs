@@ -27,7 +27,7 @@ function createWindow() {
     height: 920,
     minWidth: 980,
     minHeight: 680,
-    title: '回溯错题本',
+    title: 'Rethink',
     backgroundColor: '#f6f7fb',
     show: false,
     webPreferences: {

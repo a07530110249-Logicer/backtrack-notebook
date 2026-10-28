@@ -19,8 +19,12 @@ test('多文件夹切换、持久化与移除不删除原文件', async (t) => {
   assert.equal((await manager.current()).list().length, 1);
   const board = await externalStore.createBoard({ name: '知识结构' });
   const node = { id: 'node1', type: 'text', text: '死锁', x: 20, y: 30, width: 240, height: 140 };
-  await externalStore.updateBoard(board.id, { nodes: [node], edges: [] });
+  const concept = { id: 'node2', type: 'text', text: '互斥条件', x: 320, y: 30, width: 240, height: 140 };
+  await externalStore.updateBoard(board.id, { nodes: [node, concept], edges: [{ id: 'edge1', fromNode: 'node2', toNode: 'node1', toEnd: 'arrow', label: '必要条件' }] });
   assert.equal(externalStore.getBoard(board.id).nodes[0].text, '死锁');
+  assert.equal(externalStore.getBoard(board.id).nodes[1].questionId, undefined);
+  assert.equal(externalStore.getBoard(board.id).edges[0].label, '必要条件');
+  assert.equal(externalStore.getBoard(board.id).edges[0].toEnd, 'arrow');
   const reopened = await new WorkspaceManager(root).init();
   assert.equal(reopened.summary().activeId, summary.activeId);
   assert.equal((await reopened.current()).list()[0].title, '外部题目');

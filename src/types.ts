@@ -6,7 +6,7 @@ export interface ReviewEvent { id: string; questionId: string; reviewedAt: strin
 export interface Stats { total: number; mastered: number; reviewing: number; due: number; totalPractices: number; weekPractices: number; bySubject: { subject: string; count: number }[] }
 export interface KnowledgeSource { id: string; name: string; url: string; token: string; enabled: boolean }
 export interface ModelConfig { enabled: boolean; baseUrl: string; apiKey: string; model: string }
-export interface IntegrationConfig { cameraUrl: string; knowledgeSources: KnowledgeSource[]; model: ModelConfig }
+export interface IntegrationConfig { cameraUrl: string; cameraToken: string; knowledgeSources: KnowledgeSource[]; model: ModelConfig }
 export interface Workspace { id: string; name: string; path: string; addedAt: string; isDefault: boolean }
 export interface WorkspaceSummary { activeId: string; workspaces: Workspace[] }
 export interface BoardNode { id: string; type: 'text'; text: string; x: number; y: number; width: number; height: number; color?: string; questionId?: string }
